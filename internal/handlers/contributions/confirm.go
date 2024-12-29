@@ -29,7 +29,8 @@ func HandleConfirmContribution(bot *tgbotapi.BotAPI, callback *tgbotapi.Callback
 		return
 	}
 
-	err = repository.AddContribution(memberID, state.TempMember.Contribution, currentDate, state.TempMember.Months[0])
+	// Используем state.TempAmount вместо state.TempMember.Contribution
+	err = repository.AddContribution(memberID, state.TempAmount, currentDate, state.TempMember.Months[0])
 	if err != nil {
 		log.Printf("Failed to add contribution: %v", err)
 		msg := tgbotapi.NewMessage(userID, "Ошибка при сохранении данных в БД.")

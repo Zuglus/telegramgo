@@ -8,6 +8,7 @@ type UserState struct {
 	TempMember  domain.Member // Временные данные пользователя
 	SelectedYear int          // Выбранный год
 	Months      []Month      // Доступные месяцы для выбора
+	TempAmount  float64      // Временное хранение суммы взноса
 }
 
 // Определение структуры Month

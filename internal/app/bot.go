@@ -14,6 +14,9 @@ import (
 )
 
 func Run(bot *tgbotapi.BotAPI) {
+	// Регистрация команд бота
+	RegisterBotCommands(bot)
+
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)
@@ -37,6 +40,8 @@ func processMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 			core.HandleStart(bot, update)
 		case "help":
 			core.HandleHelp(bot, update)
+		case "setstartdate":
+			core.HandleSetStartDateCommand(bot, update)
 		default:
 			core.HandleUnknownCommand(bot, update)
 		}
@@ -53,6 +58,10 @@ func processMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 			debts.HandleYearInput(bot, update)
 		case "awaiting_month_number":
 			debts.HandleMonthNumberInput(bot, update)
+		case "awaiting_member_name_for_start_date":
+			core.HandleMemberNameForStartDateInput(bot, update)
+		case "awaiting_start_date":
+			core.HandleStartDateInput(bot, update)
 		}
 	} else {
 		// Обработка обычных сообщений

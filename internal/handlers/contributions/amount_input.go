@@ -24,7 +24,11 @@ func HandleAmountInput(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		}
 		return
 	}
-	state.TempMember.Contribution = amount
+	// В структуре domain.Member больше нет поля Contribution
+	// state.TempMember.Contribution = amount
+	// Вместо этого, сохраняем сумму во временной переменной в состоянии пользователя
+	state.TempAmount = amount
+	state.Stage = "awaiting_payment_month"
 	states.UserStates[userID] = state
 
 	// Запрашиваем выбор месяца

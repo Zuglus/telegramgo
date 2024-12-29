@@ -14,6 +14,14 @@ func HandleMonthInput(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	userID := update.Message.Chat.ID
 	state := states.UserStates[userID]
 
+	// Проверяем, что state и state.TempMember не nil
+	if state.TempMember.Months == nil {
+		log.Printf("TempMember or Months is nil for user: %v", userID)
+		msg := tgbotapi.NewMessage(userID, "Произошла ошибка. Пожалуйста, начните ввод заново.")
+		_, _ = bot.Send(msg)
+		return
+	}
+
 	// Получаем текущую дату
 	currentDate := time.Now().Format("2006-01-02")
 
@@ -26,7 +34,9 @@ func HandleMonthInput(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		return
 	}
 
-	err = repository.AddContribution(memberID, state.TempMember.Contribution, currentDate, state.TempMember.Months[0])
+	// Добавляем взнос в базу данных
+	// Используем state.TempAmount
+	err = repository.AddContribution(memberID, state.TempAmount, currentDate, state.TempMember.Months[0])
 	if err != nil {
 		log.Printf("Failed to add contribution: %v", err)
 		msg := tgbotapi.NewMessage(userID, "Ошибка при сохранении данных в БД.")
