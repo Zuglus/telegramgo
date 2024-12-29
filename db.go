@@ -106,3 +106,34 @@ func getContributions() ([]Member, error) {
 
 	return members, nil
 }
+
+// getDebts возвращает список долгов
+func getDebts() ([]Member, error) {
+    // TODO: Добавить реальный расчет долгов на основе данных из таблицы contributions. 
+    // Сейчас просто возвращаем заглушку.
+    members, err := db.Query(`
+        SELECT m.name, SUM(c.amount)
+        FROM members m
+        LEFT JOIN contributions c ON m.id = c.member_id
+        GROUP BY m.name
+    `)
+	if err != nil {
+		return nil, err
+	}
+	defer members.Close()
+
+	var debts []Member
+	for members.Next() {
+		var member Member
+		if err := members.Scan(&member.Name, &member.Debt); err != nil {
+			return nil, err
+		}
+		debts = append(debts, member)
+	}
+
+	if err = members.Err(); err != nil {
+		return nil, err
+	}
+
+	return debts, nil
+}

@@ -188,8 +188,29 @@ func handleShowDebts(bot *tgbotapi.BotAPI, callback *tgbotapi.CallbackQuery) {
 	if _, err := bot.Request(callbackConfig); err != nil {
 		log.Printf("Error responding to callback: %v", err)
 	}
-	msg := tgbotapi.NewMessage(callback.Message.Chat.ID, "Функция показа долгов пока не реализована.")
-	_, err := bot.Send(msg)
+
+	// Получаем список долгов из БД
+	members, err := getDebts()
+	if err != nil {
+		log.Printf("Error getting debts: %v", err)
+		msg := tgbotapi.NewMessage(callback.Message.Chat.ID, "Ошибка при получении списка долгов.")
+		_, _ = bot.Send(msg)
+		return
+	}
+
+	// Формируем сообщение со списком долгов
+	var messageText string
+	if len(members) == 0 {
+		messageText = "Долгов пока нет."
+	} else {
+		for _, member := range members {
+			messageText += member.Name + ": " + strconv.FormatFloat(member.Debt, 'f', 2, 64) + "\n"
+		}
+	}
+
+	// Отправляем сообщение пользователю
+	msg := tgbotapi.NewMessage(callback.Message.Chat.ID, messageText)
+	_, err = bot.Send(msg)
 	if err != nil {
 		log.Printf("Error sending message: %v", err)
 	}
