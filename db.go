@@ -30,6 +30,7 @@ func createTables() {
             member_id INTEGER,
             amount REAL,
             date TEXT,
+            payment_month TEXT,
             FOREIGN KEY (member_id) REFERENCES members(id)
         );
     `)
@@ -44,6 +45,7 @@ type Member struct {
 	Name         string
 	Contribution float64
 	Debt         float64
+	Months       []string
 }
 
 // addOrUpdateMember добавляет нового участника или обновляет существующего
@@ -73,18 +75,60 @@ func addOrUpdateMember(name string) (int64, error) {
 }
 
 // addContribution добавляет взнос в таблицу contributions
-func addContribution(memberID int64, amount float64, date string) error {
-	_, err := db.Exec("INSERT INTO contributions (member_id, amount, date) VALUES (?, ?, ?)", memberID, amount, date)
+func addContribution(memberID int64, amount float64, date string, paymentMonth string) error {
+	_, err := db.Exec("INSERT INTO contributions (member_id, amount, date, payment_month) VALUES (?, ?, ?, ?)", memberID, amount, date, paymentMonth)
 	return err
 }
 
 // getContributions возвращает список всех взносов
 func getContributions() ([]Member, error) {
 	rows, err := db.Query(`
-        SELECT m.name, SUM(c.amount)
+		SELECT m.name, c.payment_month, c.amount
+		FROM members m
+		LEFT JOIN contributions c ON m.id = c.member_id
+		ORDER BY m.name, c.payment_month
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var membersMap = make(map[string]*Member)
+	for rows.Next() {
+		var name, month string
+		var amount float64
+		if err := rows.Scan(&name, &month, &amount); err != nil {
+			return nil, err
+		}
+
+		if _, ok := membersMap[name]; !ok {
+			membersMap[name] = &Member{Name: name, Months: []string{}, Contribution: 0}
+		}
+		membersMap[name].Months = append(membersMap[name].Months, month)
+		membersMap[name].Contribution += amount
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	var members []Member
+	for _, member := range membersMap {
+		members = append(members, *member)
+	}
+
+	return members, nil
+}
+
+// getDebts возвращает список долгов
+func getDebts() ([]Member, error) {
+	rows, err := db.Query(`
+        SELECT m.name, GROUP_CONCAT(DISTINCT c.payment_month), COUNT(DISTINCT c.payment_month)
         FROM members m
         LEFT JOIN contributions c ON m.id = c.member_id
+		WHERE c.payment_month IS NOT NULL
         GROUP BY m.name
+        ORDER BY m.name
     `)
 	if err != nil {
 		return nil, err
@@ -94,9 +138,20 @@ func getContributions() ([]Member, error) {
 	var members []Member
 	for rows.Next() {
 		var member Member
-		if err := rows.Scan(&member.Name, &member.Contribution); err != nil {
+		var monthsPaidStr *string
+		var monthsPaidCount int
+
+		if err := rows.Scan(&member.Name, &monthsPaidStr, &monthsPaidCount); err != nil {
 			return nil, err
 		}
+
+		// Заполняем срез Months оплаченными месяцами
+		member.Months = []string{}
+		if monthsPaidStr != nil {
+			member.Months = splitMonths(*monthsPaidStr) // Тебе нужно реализовать функцию splitMonths, которая разбивает строку с месяцами на срез
+		}
+		member.Debt = float64(monthsPaidCount)
+
 		members = append(members, member)
 	}
 
@@ -105,35 +160,4 @@ func getContributions() ([]Member, error) {
 	}
 
 	return members, nil
-}
-
-// getDebts возвращает список долгов
-func getDebts() ([]Member, error) {
-    // TODO: Добавить реальный расчет долгов на основе данных из таблицы contributions. 
-    // Сейчас просто возвращаем заглушку.
-    members, err := db.Query(`
-        SELECT m.name, SUM(c.amount)
-        FROM members m
-        LEFT JOIN contributions c ON m.id = c.member_id
-        GROUP BY m.name
-    `)
-	if err != nil {
-		return nil, err
-	}
-	defer members.Close()
-
-	var debts []Member
-	for members.Next() {
-		var member Member
-		if err := members.Scan(&member.Name, &member.Debt); err != nil {
-			return nil, err
-		}
-		debts = append(debts, member)
-	}
-
-	if err = members.Err(); err != nil {
-		return nil, err
-	}
-
-	return debts, nil
 }
