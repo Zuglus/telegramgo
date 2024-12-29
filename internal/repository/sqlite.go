@@ -1,16 +1,18 @@
-package main
+package repository
 
 import (
 	"database/sql"
 	"log"
 	"strings"
 
+	"telegramgo/internal/domain"
+
 	_ "github.com/mattn/go-sqlite3"
 )
 
 var db *sql.DB
 
-func initDB() {
+func InitDB() {
 	var err error
 	db, err = sql.Open("sqlite3", "./data/contributions.db")
 	if err != nil {
@@ -40,17 +42,8 @@ func createTables() {
 	}
 }
 
-// Member представляет собой запись в таблице members
-type Member struct {
-	ID           int64
-	Name         string
-	Contribution float64
-	Debt         float64
-	Months       []string
-}
-
 // addOrUpdateMember добавляет нового участника или обновляет существующего
-func addOrUpdateMember(name string) (int64, error) {
+func AddOrUpdateMember(name string) (int64, error) {
 	// Проверяем, существует ли участник с таким именем
 	var memberID int64
 	err := db.QueryRow("SELECT id FROM members WHERE name = ?", name).Scan(&memberID)
@@ -76,13 +69,13 @@ func addOrUpdateMember(name string) (int64, error) {
 }
 
 // addContribution добавляет взнос в таблицу contributions
-func addContribution(memberID int64, amount float64, date string, paymentMonth string) error {
+func AddContribution(memberID int64, amount float64, date string, paymentMonth string) error {
 	_, err := db.Exec("INSERT INTO contributions (member_id, amount, date, payment_month) VALUES (?, ?, ?, ?)", memberID, amount, date, paymentMonth)
 	return err
 }
 
 // getContributions возвращает список всех взносов
-func getContributions() ([]Member, error) {
+func GetContributions() ([]domain.Member, error) {
 	rows, err := db.Query(`
 		SELECT m.name, c.payment_month, c.amount
 		FROM members m
@@ -94,7 +87,7 @@ func getContributions() ([]Member, error) {
 	}
 	defer rows.Close()
 
-	var membersMap = make(map[string]*Member)
+	var membersMap = make(map[string]*domain.Member)
 	for rows.Next() {
 		var name, month string
 		var amount float64
@@ -103,7 +96,7 @@ func getContributions() ([]Member, error) {
 		}
 
 		if _, ok := membersMap[name]; !ok {
-			membersMap[name] = &Member{Name: name, Months: []string{}, Contribution: 0}
+			membersMap[name] = &domain.Member{Name: name, Months: []string{}, Contribution: 0}
 		}
 		membersMap[name].Months = append(membersMap[name].Months, month)
 		membersMap[name].Contribution += amount
@@ -113,7 +106,7 @@ func getContributions() ([]Member, error) {
 		return nil, err
 	}
 
-	var members []Member
+	var members []domain.Member
 	for _, member := range membersMap {
 		members = append(members, *member)
 	}
@@ -122,7 +115,7 @@ func getContributions() ([]Member, error) {
 }
 
 // getDebts возвращает список долгов
-func getDebts() ([]Member, error) {
+func GetDebts() ([]domain.Member, error) {
 	rows, err := db.Query(`
         SELECT m.name, GROUP_CONCAT(DISTINCT c.payment_month), COUNT(DISTINCT c.payment_month)
         FROM members m
@@ -136,9 +129,9 @@ func getDebts() ([]Member, error) {
 	}
 	defer rows.Close()
 
-	var members []Member
+	var members []domain.Member
 	for rows.Next() {
-		var member Member
+		var member domain.Member
 		var monthsPaidStr *string
 		var monthsPaidCount int
 
