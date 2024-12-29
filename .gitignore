@@ -1,3 +1,4 @@
 /data
 *.db
 credentials.json
+.env

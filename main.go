@@ -5,17 +5,10 @@ import (
 	"os"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
-	"google.golang.org/api/sheets/v4"
 )
 
-var srv *sheets.Service
-var bot *tgbotapi.BotAPI
-var spreadsheetId = "1RArmgBABcOKmn3lCM2z4xKW3KdDcrD6nJN2SosD3luQ" // Идентификатор твоей таблицы
-
 func main() {
-	// Инициализация бота
-	var err error
-	bot, err = tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_BOT_TOKEN"))
+	bot, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_BOT_TOKEN"))
 	if err != nil {
 		log.Panic(err)
 	}
@@ -23,13 +16,6 @@ func main() {
 	bot.Debug = true
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
-	// Инициализация Google Sheets API
-	srv, err = initSheetsService() // Реализуй эту функцию в sheets.go
-	if err != nil {
-		log.Fatalf("Unable to retrieve Sheets client: %v", err)
-	}
-
-	// Обработка обновлений
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)
@@ -37,11 +23,54 @@ func main() {
 	for update := range updates {
 		if update.Message != nil {
 			if update.Message.IsCommand() {
-				handleCommand(update)
-			} else {
-				// Обработка обычных сообщений (например, ввод данных для нового взноса)
-				handleMessage(update)
+                switch update.Message.Command() {
+                case "start":
+                    handleStart(bot, update)
+                case "help":
+                    handleHelp(bot, update)
+                default:
+                    handleUnknownCommand(bot, update)
+                }
+			} else if update.CallbackQuery != nil {
+                //обработка нажатия на кнопку
+            } else {
+				// Обработка обычных сообщений
 			}
 		}
+	}
+}
+
+func handleStart(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	var keyboard = tgbotapi.NewInlineKeyboardMarkup(
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("Добавить взнос", "add_contribution"),
+			tgbotapi.NewInlineKeyboardButtonData("Показать взносы", "show_contributions"),
+		),
+		tgbotapi.NewInlineKeyboardRow(
+			tgbotapi.NewInlineKeyboardButtonData("Показать долги", "show_debts"),
+		),
+	)
+
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Выберите действие:")
+	msg.ReplyMarkup = keyboard
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Printf("Error sending message: %v", err)
+	}
+}
+
+func handleHelp(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "/start - начать\n/help - помощь")
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Printf("Error sending message: %v", err)
+	}
+}
+
+func handleUnknownCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Неизвестная команда")
+	_, err := bot.Send(msg)
+	if err != nil {
+		log.Printf("Error sending message: %v", err)
 	}
 }
