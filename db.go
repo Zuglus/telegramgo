@@ -3,6 +3,7 @@ package main
 import (
 	"database/sql"
 	"log"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -160,4 +161,12 @@ func getDebts() ([]Member, error) {
 	}
 
 	return members, nil
+}
+
+// Вспомогательная функция для разделения строки с месяцами на срез строк
+func splitMonths(monthsStr string) []string {
+	if monthsStr == "" {
+		return []string{}
+	}
+	return strings.Split(monthsStr, ",")
 }

@@ -6,20 +6,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"github.com/joho/godotenv"
 )
-
-// Структура для хранения текущего состояния пользователя
-type UserState struct {
-	Stage      string // "idle", "awaiting_name", "awaiting_amount", "awaiting_payment_month"
-	TempMember Member // Временные данные пользователя
-}
-
-// Хранилище состояний пользователей (для простоты используем map, но в будущем лучше заменить на БД)
-var userStates = make(map[int64]UserState)
 
 func main() {
 	err := godotenv.Load()
@@ -72,6 +62,10 @@ func processMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 			handleAmountInput(bot, update)
 		case "awaiting_payment_month":
 			handleMonthInput(bot, update)
+		case "awaiting_year":
+			handleYearInput(bot, update)
+		case "awaiting_month_number":
+			handleMonthNumberInput(bot, update)
 		}
 	} else {
 		// Обработка обычных сообщений
@@ -81,6 +75,14 @@ func processMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 
 func processCallback(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	callback := update.CallbackQuery
+	userID := callback.Message.Chat.ID
+	// Получаем текущее состояние пользователя из хранилища состояний
+	state, exists := userStates[userID]
+	// Если состояние пользователя не найдено, устанавливаем состояние "idle"
+	if !exists {
+		state = UserState{Stage: "idle", TempMember: Member{}}
+	}
+
 	switch callback.Data {
 	case "add_contribution":
 		handleAddContribution(bot, callback)
@@ -88,234 +90,97 @@ func processCallback(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 		handleShowContributions(bot, callback)
 	case "show_debts":
 		handleShowDebts(bot, callback)
-	}
-}
-
-func handleStart(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	var keyboard = tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Добавить взнос", "add_contribution"),
-			tgbotapi.NewInlineKeyboardButtonData("Показать взносы", "show_contributions"),
-		),
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Показать долги", "show_debts"),
-		),
-	)
-
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Выберите действие:")
-	msg.ReplyMarkup = keyboard
-	_, err := bot.Send(msg)
-	if err != nil {
-		log.Printf("Error sending message: %v", err)
-	}
-}
-
-func handleHelp(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "/start - начать\n/help - помощь")
-	_, err := bot.Send(msg)
-	if err != nil {
-		log.Printf("Error sending message: %v", err)
-	}
-}
-
-func handleUnknownCommand(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Неизвестная команда")
-	_, err := bot.Send(msg)
-	if err != nil {
-		log.Printf("Error sending message: %v", err)
-	}
-}
-
-func handleUnknownMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	msg := tgbotapi.NewMessage(update.Message.Chat.ID, "Нажмите /start")
-	_, err := bot.Send(msg)
-	if err != nil {
-		log.Printf("Error sending message: %v", err)
-	}
-}
-
-func handleAddContribution(bot *tgbotapi.BotAPI, callback *tgbotapi.CallbackQuery) {
-	// Отвечаем на callback, чтобы убрать "часики" на кнопке
-	callbackConfig := tgbotapi.NewCallback(callback.ID, "")
-	if _, err := bot.Request(callbackConfig); err != nil {
-		log.Printf("Error responding to callback: %v", err)
-	}
-
-	// Начинаем процесс добавления взноса
-	userID := callback.Message.Chat.ID
-	userStates[userID] = UserState{Stage: "awaiting_name", TempMember: Member{}}
-
-	// Отправляем сообщение пользователю с запросом имени
-	msg := tgbotapi.NewMessage(callback.Message.Chat.ID, "Введите имя:")
-	_, err := bot.Send(msg)
-	if err != nil {
-		log.Printf("Error sending message: %v", err)
-	}
-}
-
-func handleShowContributions(bot *tgbotapi.BotAPI, callback *tgbotapi.CallbackQuery) {
-	// Отвечаем на callback, чтобы убрать "часики" на кнопке
-	callbackConfig := tgbotapi.NewCallback(callback.ID, "")
-	if _, err := bot.Request(callbackConfig); err != nil {
-		log.Printf("Error responding to callback: %v", err)
-	}
-
-	// Получаем список взносов из БД
-	members, err := getContributions()
-	if err != nil {
-		log.Printf("Error getting contributions: %v", err)
-		msg := tgbotapi.NewMessage(callback.Message.Chat.ID, "Ошибка при получении списка взносов.")
-		_, _ = bot.Send(msg)
-		return
-	}
-
-	// Формируем сообщение со списком взносов
-	var messageText string
-	if len(members) == 0 {
-		messageText = "Взносов пока нет."
-	} else {
-		for _, member := range members {
-			messageText += fmt.Sprintf("%s: %.2f\nМесяцы: %v\n\n", member.Name, member.Contribution, member.Months)
+	case "current_month", "previous_month":
+		handleSelectMonth(bot, callback, state)
+	case "debt":
+		handleDebt(bot, callback)
+	case "select_year":
+		handleSelectYear(bot, callback, state)
+	case "confirm_contribution":
+		handleConfirmContribution(bot, callback)
+	case "reject_contribution":
+		handleRejectContribution(bot, callback)
+	default:
+		if strings.HasPrefix(callback.Data, "year_") {
+			selectedYear, _ := strconv.Atoi(strings.TrimPrefix(callback.Data, "year_"))
+			handleYearSelected(bot, callback, state, selectedYear)
+		} else if strings.HasPrefix(callback.Data, "month_") {
+			selectedMonth, _ := strconv.Atoi(strings.TrimPrefix(callback.Data, "month_"))
+			handleMonthSelected(bot, callback, state, selectedMonth)
 		}
 	}
-
-	// Отправляем сообщение пользователю
-	msg := tgbotapi.NewMessage(callback.Message.Chat.ID, messageText)
-	_, err = bot.Send(msg)
-	if err != nil {
-		log.Printf("Error sending message: %v", err)
-	}
 }
 
-func handleShowDebts(bot *tgbotapi.BotAPI, callback *tgbotapi.CallbackQuery) {
-	// Отвечаем на callback, чтобы убрать "часики" на кнопке
-	callbackConfig := tgbotapi.NewCallback(callback.ID, "")
-	if _, err := bot.Request(callbackConfig); err != nil {
-		log.Printf("Error responding to callback: %v", err)
-	}
-
-	// Получаем список долгов из БД
-	members, err := getDebts()
-	if err != nil {
-		log.Printf("Error getting debts: %v", err)
-		msg := tgbotapi.NewMessage(callback.Message.Chat.ID, "Ошибка при получении списка долгов.")
-		_, _ = bot.Send(msg)
-		return
-	}
-
-	// Формируем сообщение со списком долгов
-	var messageText string
-	if len(members) == 0 {
-		messageText = "Долгов пока нет."
-	} else {
-		for _, member := range members {
-			messageText += fmt.Sprintf("%s: %.2f\nОплаченные месяцы: %v\n\n", member.Name, member.Debt, member.Months)
-		}
-	}
-
-	// Отправляем сообщение пользователю
-	msg := tgbotapi.NewMessage(callback.Message.Chat.ID, messageText)
-	_, err = bot.Send(msg)
-	if err != nil {
-		log.Printf("Error sending message: %v", err)
-	}
-}
-
-func handleNameInput(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+func handleYearInput(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	userID := update.Message.Chat.ID
 	state := userStates[userID]
 
-	// Сохраняем имя пользователя
-	state.TempMember.Name = update.Message.Text
-	state.Stage = "awaiting_amount"
-	userStates[userID] = state
-
-	// Запрашиваем сумму взноса
-	msg := tgbotapi.NewMessage(userID, "Введите сумму взноса:")
-	_, err := bot.Send(msg)
+	// Пытаемся преобразовать введенный текст в число (год)
+	selectedYear, err := strconv.Atoi(update.Message.Text)
 	if err != nil {
-		log.Printf("Error sending message: %v", err)
-	}
-}
-
-func handleAmountInput(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
-	userID := update.Message.Chat.ID
-	state := userStates[userID]
-
-	// Сохраняем сумму взноса
-	amount, err := strconv.ParseFloat(update.Message.Text, 64)
-	if err != nil {
-		// Если не удалось преобразовать текст в число, отправляем сообщение об ошибке
-		msg := tgbotapi.NewMessage(userID, "Пожалуйста, введите корректную сумму взноса (число).")
+		// Если не удалось преобразовать в число, отправляем сообщение об ошибке
+		msg := tgbotapi.NewMessage(userID, "Пожалуйста, введите корректный год в формате ГГГГ.")
 		_, err = bot.Send(msg)
 		if err != nil {
 			log.Printf("Error sending message: %v", err)
 		}
 		return
 	}
-	state.TempMember.Contribution = amount
-	state.Stage = "awaiting_payment_month"
+
+	// Обновляем состояние пользователя с выбранным годом
+	state.SelectedYear = selectedYear
+	state.Stage = "awaiting_month_number"
 	userStates[userID] = state
 
-	// Запрашиваем сумму взноса
-	msg := tgbotapi.NewMessage(userID, "Введите месяц в формате ГГГГ-ММ:")
+	// Запрашиваем выбор месяца
+	monthsKeyboard := generateMonthsKeyboard()
+
+	msg := tgbotapi.NewMessage(userID, fmt.Sprintf("Выбран год: %d\nВыберите месяц:", selectedYear))
+	msg.ReplyMarkup = monthsKeyboard
 	_, err = bot.Send(msg)
 	if err != nil {
 		log.Printf("Error sending message: %v", err)
 	}
-
 }
 
-func handleMonthInput(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
+func handleMonthNumberInput(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 	userID := update.Message.Chat.ID
 	state := userStates[userID]
 
-	// Сохраняем месяц платежа
-	paymentMonth := update.Message.Text
-	// Простая проверка формата
-	if len(paymentMonth) != 7 || paymentMonth[4] != '-' {
-		msg := tgbotapi.NewMessage(userID, "Пожалуйста, введите месяц в формате ГГГГ-ММ.")
-		_, err := bot.Send(msg)
+	// Пытаемся преобразовать введенный текст в число (месяц)
+	selectedMonth, err := strconv.Atoi(update.Message.Text)
+	if err != nil {
+		// Если не удалось преобразовать в число, отправляем сообщение об ошибке
+		msg := tgbotapi.NewMessage(userID, "Пожалуйста, введите корректный номер месяца (1-12).")
+		_, err = bot.Send(msg)
 		if err != nil {
 			log.Printf("Error sending message: %v", err)
 		}
 		return
 	}
 
-	// Записываем данные в БД
-	memberID, err := addOrUpdateMember(state.TempMember.Name)
-	if err != nil {
-		log.Printf("Failed to add or update member: %v", err)
-		msg := tgbotapi.NewMessage(userID, "Ошибка при сохранении данных в БД.")
-		_, _ = bot.Send(msg)
+	// Проверяем, что месяц находится в допустимом диапазоне
+	if selectedMonth < 1 || selectedMonth > 12 {
+		msg := tgbotapi.NewMessage(userID, "Пожалуйста, введите номер месяца в диапазоне от 1 до 12.")
+		_, err = bot.Send(msg)
+		if err != nil {
+			log.Printf("Error sending message: %v", err)
+		}
 		return
 	}
 
-	// Используем текущую дату в формате "2006-01-02"
-	currentDate := time.Now().Format("2006-01-02")
+	// Формируем месяц в формате ГГГГ-ММ
+	paymentMonth := fmt.Sprintf("%d-%02d", state.SelectedYear, selectedMonth)
 
-	err = addContribution(memberID, state.TempMember.Contribution, currentDate, paymentMonth)
-	if err != nil {
-		log.Printf("Failed to add contribution: %v", err)
-		msg := tgbotapi.NewMessage(userID, "Ошибка при сохранении данных в БД.")
-		_, _ = bot.Send(msg)
-		return
-	}
+	// Обновляем состояние пользователя
+	state.TempMember.Months = append(state.TempMember.Months, paymentMonth)
+	state.Stage = "awaiting_payment_month"
+	userStates[userID] = state
 
-	// Очищаем состояние пользователя
-	delete(userStates, userID)
-
-	// Отправляем подтверждение
-	msg := tgbotapi.NewMessage(userID, "Взнос успешно добавлен!")
+	// Отправляем сообщение об успешно выбранном месяце
+	msg := tgbotapi.NewMessage(userID, fmt.Sprintf("Выбран месяц: %s", paymentMonth))
 	_, err = bot.Send(msg)
 	if err != nil {
 		log.Printf("Error sending message: %v", err)
 	}
-}
-
-func splitMonths(monthsStr string) []string {
-	if monthsStr == "" {
-		return []string{}
-	}
-	return strings.Split(monthsStr, ",")
 }
