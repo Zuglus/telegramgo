@@ -148,7 +148,7 @@ func getDebts() ([]Member, error) {
 		// Заполняем срез Months оплаченными месяцами
 		member.Months = []string{}
 		if monthsPaidStr != nil {
-			member.Months = splitMonths(*monthsPaidStr) // Тебе нужно реализовать функцию splitMonths, которая разбивает строку с месяцами на срез
+			member.Months = splitMonths(*monthsPaidStr)
 		}
 		member.Debt = float64(monthsPaidCount)
 
