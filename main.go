@@ -8,8 +8,6 @@ import (
 )
 
 func main() {
-	initDB()
-
 	bot, err := tgbotapi.NewBotAPI(os.Getenv("TELEGRAM_BOT_TOKEN"))
 	if err != nil {
 		log.Panic(err)
@@ -17,6 +15,8 @@ func main() {
 
 	bot.Debug = true
 	log.Printf("Authorized on account %s", bot.Self.UserName)
+
+    initDB()
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
