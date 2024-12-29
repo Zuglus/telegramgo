@@ -4,6 +4,7 @@ import (
 	"log"
 	"os"
 
+	_ "./" // Импортируем текущий пакет, чтобы получить доступ к функции initDB из db.go
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
@@ -16,7 +17,7 @@ func main() {
 	bot.Debug = true
 	log.Printf("Authorized on account %s", bot.Self.UserName)
 
-    initDB()
+	initDB() // Теперь функция initDB будет доступна
 
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
@@ -25,17 +26,17 @@ func main() {
 	for update := range updates {
 		if update.Message != nil {
 			if update.Message.IsCommand() {
-                switch update.Message.Command() {
-                case "start":
-                    handleStart(bot, update)
-                case "help":
-                    handleHelp(bot, update)
-                default:
-                    handleUnknownCommand(bot, update)
-                }
+				switch update.Message.Command() {
+				case "start":
+					handleStart(bot, update)
+				case "help":
+					handleHelp(bot, update)
+				default:
+					handleUnknownCommand(bot, update)
+				}
 			} else if update.CallbackQuery != nil {
-                //обработка нажатия на кнопку
-            } else {
+				//обработка нажатия на кнопку
+			} else {
 				// Обработка обычных сообщений
 			}
 		}
