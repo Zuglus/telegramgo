@@ -77,3 +77,32 @@ func addContribution(memberID int64, amount float64, date string) error {
 	_, err := db.Exec("INSERT INTO contributions (member_id, amount, date) VALUES (?, ?, ?)", memberID, amount, date)
 	return err
 }
+
+// getContributions возвращает список всех взносов
+func getContributions() ([]Member, error) {
+	rows, err := db.Query(`
+        SELECT m.name, SUM(c.amount)
+        FROM members m
+        LEFT JOIN contributions c ON m.id = c.member_id
+        GROUP BY m.name
+    `)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var members []Member
+	for rows.Next() {
+		var member Member
+		if err := rows.Scan(&member.Name, &member.Contribution); err != nil {
+			return nil, err
+		}
+		members = append(members, member)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return members, nil
+}

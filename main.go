@@ -149,16 +149,37 @@ func handleAddContribution(bot *tgbotapi.BotAPI, callback *tgbotapi.CallbackQuer
 }
 
 func handleShowContributions(bot *tgbotapi.BotAPI, callback *tgbotapi.CallbackQuery) {
-	// Отвечаем на callback, чтобы убрать "часики" на кнопке
-	callbackConfig := tgbotapi.NewCallback(callback.ID, "")
-	if _, err := bot.Request(callbackConfig); err != nil {
-		log.Printf("Error responding to callback: %v", err)
-	}
-	msg := tgbotapi.NewMessage(callback.Message.Chat.ID, "Функция показа взносов пока не реализована.")
-	_, err := bot.Send(msg)
-	if err != nil {
-		log.Printf("Error sending message: %v", err)
-	}
+    // Отвечаем на callback, чтобы убрать "часики" на кнопке
+    callbackConfig := tgbotapi.NewCallback(callback.ID, "")
+    if _, err := bot.Request(callbackConfig); err != nil {
+        log.Printf("Error responding to callback: %v", err)
+    }
+
+    // Получаем список взносов из БД
+    members, err := getContributions()
+    if err != nil {
+        log.Printf("Error getting contributions: %v", err)
+        msg := tgbotapi.NewMessage(callback.Message.Chat.ID, "Ошибка при получении списка взносов.")
+        _, _ = bot.Send(msg)
+        return
+    }
+
+    // Формируем сообщение со списком взносов
+    var messageText string
+    if len(members) == 0 {
+        messageText = "Взносов пока нет."
+    } else {
+        for _, member := range members {
+            messageText += member.Name + ": " + strconv.FormatFloat(member.Contribution, 'f', 2, 64) + "\n"
+        }
+    }
+
+    // Отправляем сообщение пользователю
+    msg := tgbotapi.NewMessage(callback.Message.Chat.ID, messageText)
+    _, err = bot.Send(msg)
+    if err != nil {
+        log.Printf("Error sending message: %v", err)
+    }
 }
 
 func handleShowDebts(bot *tgbotapi.BotAPI, callback *tgbotapi.CallbackQuery) {
