@@ -4,7 +4,7 @@ import "telegramgo/internal/domain"
 
 // Структура для хранения текущего состояния пользователя
 type UserState struct {
-	Stage       string         // "idle", "awaiting_name", "awaiting_amount", "awaiting_payment_month", "awaiting_year", "awaiting_month_number"
+	Stage       string         // "idle", "awaiting_name", "awaiting_amount", "awaiting_payment_month", "awaiting_year", "awaiting_month_number", "awaiting_contribution_date"
 	TempMember  domain.Member // Временные данные пользователя
 	SelectedYear int          // Выбранный год
 	Months      []Month      // Доступные месяцы для выбора

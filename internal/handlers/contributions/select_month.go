@@ -27,8 +27,9 @@ func HandleSelectMonth(bot *tgbotapi.BotAPI, callback *tgbotapi.CallbackQuery, s
 	}
 
 	state.TempMember.Months = append(state.TempMember.Months, paymentMonth)
-	state.Stage = "awaiting_payment_month"
-	states.UserStates[userID] = state
+	// Устанавливаем состояние "ожидание даты взноса"
+	state.Stage = "awaiting_contribution_date"
+	userStates[userID] = state
 
 	// Создаем клавиатуру с кнопками "Подтвердить" и "Отклонить"
 	confirmationKeyboard := tgbotapi.NewInlineKeyboardMarkup(
@@ -38,8 +39,8 @@ func HandleSelectMonth(bot *tgbotapi.BotAPI, callback *tgbotapi.CallbackQuery, s
 		),
 	)
 
-	msg := tgbotapi.NewMessage(userID, fmt.Sprintf("Выбран месяц: %s\nПодтвердите добавление взноса.", paymentMonth))
-	msg.ReplyMarkup = confirmationKeyboard
+	msg := tgbotapi.NewMessage(userID, fmt.Sprintf("Выбран месяц: %s\nТеперь введите дату взноса в формате ГГГГ-ММ-ДД:", paymentMonth))
+	// msg.ReplyMarkup = confirmationKeyboard
 	_, err := bot.Send(msg)
 	if err != nil {
 		log.Printf("Error sending message: %v", err)

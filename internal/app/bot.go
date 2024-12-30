@@ -62,6 +62,8 @@ func processMessage(bot *tgbotapi.BotAPI, update tgbotapi.Update) {
 			core.HandleMemberNameForStartDateInput(bot, update)
 		case "awaiting_start_date":
 			core.HandleStartDateInput(bot, update)
+		case "awaiting_contribution_date":
+			contributions.HandleContributionDateInput(bot, update)
 		}
 	} else {
 		// Обработка обычных сообщений
