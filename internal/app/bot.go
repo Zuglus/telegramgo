@@ -5,17 +5,16 @@ import (
 )
 
 func Run(bot *tgbotapi.BotAPI) {
-    // Инициализируем роутер
-    router := NewRouter(bot)
+	// Регистрация команд бота
+	RegisterBotCommands(bot)
 
-    // Регистрация команд бота
-    RegisterBotCommands(bot)
+	u := tgbotapi.NewUpdate(0)
+	u.Timeout = 60
+	updates := bot.GetUpdatesChan(u)
 
-    u := tgbotapi.NewUpdate(0)
-    u.Timeout = 60
-    updates := bot.GetUpdatesChan(u)
+	router := NewRouter(bot) // Инициализируем роутер
 
-    for update := range updates {
-        router.RouteUpdate(update) // Передаем обновления в роутер
-    }
+	for update := range updates {
+		router.RouteUpdate(update) // Передаем обновления в роутер
+	}
 }
