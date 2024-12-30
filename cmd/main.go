@@ -23,7 +23,7 @@ func main() {
 	}
 
 	bot.Debug = true
-	log.Printf("Authorized on account %s", bot.Self.UserName)
+	log.Printf("Авторизован бот %s", bot.Self.UserName)
 
 	repository.InitDB()
 
