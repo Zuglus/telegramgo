@@ -5,6 +5,7 @@ import (
 	"log"
 
 	"telegramgo/internal/repository"
+	"telegramgo/internal/telegram"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -25,7 +26,7 @@ func HandleShowDebts(bot *tgbotapi.BotAPI, callback *tgbotapi.CallbackQuery) {
 		messageText = "Долгов пока нет."
 	} else {
 		for _, member := range members {
-			messageText += fmt.Sprintf("%s: %.2f\nОплаченные месяцы: %v\n\n", member.Name, member.Debt, member.Months)
+			messageText += fmt.Sprintf("%s: %.0f\nОплаченные месяцы: %v\n\n", member.Name, member.Debt, member.Months)
 		}
 	}
 
@@ -36,9 +37,5 @@ func HandleShowDebts(bot *tgbotapi.BotAPI, callback *tgbotapi.CallbackQuery) {
 		log.Printf("Error sending message: %v", err)
 	}
 	// Удаляем сообщение с inline-кнопками
-	deleteMsg := tgbotapi.NewDeleteMessage(callback.Message.Chat.ID, callback.Message.MessageID)
-	_, err = bot.Send(deleteMsg)
-	if err != nil {
-		log.Printf("Failed to delete message: %v", err)
-	}
+	telegram.DeleteInlineKeyboard(bot, callback)
 }

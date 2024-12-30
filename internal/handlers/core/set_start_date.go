@@ -41,6 +41,8 @@ func HandleMemberNameForStartDateInput(bot *tgbotapi.BotAPI, update tgbotapi.Upd
 		log.Printf("Error getting member: %v", err)
 		msg := tgbotapi.NewMessage(userID, "Участник с таким именем не найден.")
 		_, _ = bot.Send(msg)
+		// Сбрасываем состояние пользователя, так как участник не найден
+		delete(states.UserStates, userID)
 		return
 	}
 

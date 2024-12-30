@@ -29,15 +29,7 @@ func HandleSelectMonth(bot *tgbotapi.BotAPI, callback *tgbotapi.CallbackQuery, s
 	state.TempMember.Months = append(state.TempMember.Months, paymentMonth)
 	// Устанавливаем состояние "ожидание даты взноса"
 	state.Stage = "awaiting_contribution_date"
-	userStates[userID] = state
-
-	// Создаем клавиатуру с кнопками "Подтвердить" и "Отклонить"
-	confirmationKeyboard := tgbotapi.NewInlineKeyboardMarkup(
-		tgbotapi.NewInlineKeyboardRow(
-			tgbotapi.NewInlineKeyboardButtonData("Подтвердить", "confirm_contribution"),
-			tgbotapi.NewInlineKeyboardButtonData("Отклонить", "reject_contribution"),
-		),
-	)
+	states.UserStates[userID] = state
 
 	msg := tgbotapi.NewMessage(userID, fmt.Sprintf("Выбран месяц: %s\nТеперь введите дату взноса в формате ГГГГ-ММ-ДД:", paymentMonth))
 	// msg.ReplyMarkup = confirmationKeyboard

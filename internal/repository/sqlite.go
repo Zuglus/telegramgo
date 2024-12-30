@@ -2,6 +2,7 @@ package repository
 
 import (
 	"database/sql"
+	"fmt"
 	"log"
 	"strings"
 	"time"
@@ -99,10 +100,15 @@ func GetContributions() ([]domain.Member, error) {
 		}
 
 		if _, ok := membersMap[name]; !ok {
-			membersMap[name] = &domain.Member{Name: name, Months: []string{}, StartDate: *startDate}
+			membersMap[name] = &domain.Member{Name: name, Months: []string{}}
 		}
+
+		// Проверяем, что startDate не nil, прежде чем его разыменовывать
+		if startDate != nil {
+			membersMap[name].StartDate = *startDate
+		}
+
 		membersMap[name].Months = append(membersMap[name].Months, month)
-		// Сумму взносов больше не храним в структуре Member, так как она вычисляется
 	}
 
 	if err = rows.Err(); err != nil {
@@ -120,14 +126,26 @@ func GetContributions() ([]domain.Member, error) {
 // GetMember ищет участника по имени и возвращает его данные
 func GetMember(name string) (*domain.Member, error) {
 	member := &domain.Member{}
-	err := db.QueryRow("SELECT id, name, start_date FROM members WHERE name = ?", name).Scan(&member.ID, &member.Name, &member.StartDate)
+	var startDate sql.NullString
+	err := db.QueryRow("SELECT id, name, start_date FROM members WHERE name = ?", name).Scan(&member.ID, &member.Name, &startDate)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("участник с именем %s не найден", name)
+		}
 		return nil, err
 	}
+
+	// Проверяем, была ли установлена начальная дата
+	if startDate.Valid {
+		member.StartDate = startDate.String
+	} else {
+		member.StartDate = "" // Или другое значение по умолчанию
+	}
+
 	return member, nil
 }
 
-// GetDebts возвращает список долгов
+// getDebts возвращает список долгов
 func GetDebts() ([]domain.Member, error) {
 	rows, err := db.Query(`
         SELECT m.name, GROUP_CONCAT(DISTINCT c.payment_month), m.start_date
@@ -165,7 +183,11 @@ func GetDebts() ([]domain.Member, error) {
 		if member.StartDate == "" {
 			member.Debt = 0 // Если начальная дата не установлена, считаем, что долга нет
 		} else {
-			member.Debt = float64(calculateUnpaidMonths(member.StartDate, member.Months))
+			unpaidMonthsCount, err := calculateUnpaidMonths(member.StartDate, member.Months)
+			if err != nil {
+				return nil, err
+			}
+			member.Debt = float64(unpaidMonthsCount)
 		}
 
 		members = append(members, member)
@@ -176,6 +198,36 @@ func GetDebts() ([]domain.Member, error) {
 	}
 
 	return members, nil
+}
+
+// Вспомогательная функция для расчета количества неоплаченных месяцев
+func calculateUnpaidMonths(startDateStr string, paidMonths []string) (int, error) {
+	startDate, err := time.Parse("2006-01-02", startDateStr)
+	if err != nil {
+		return 0, fmt.Errorf("error parsing start date: %w", err)
+	}
+
+	// Приводим оплаченные месяцы к формату time.Time для упрощения сравнения
+	paidMonthsTime := make(map[time.Time]bool)
+	for _, monthStr := range paidMonths {
+		monthTime, err := time.Parse("2006-01", monthStr)
+		if err != nil {
+			return 0, fmt.Errorf("error parsing paid month: %w", err)
+		}
+		paidMonthsTime[monthTime] = true
+	}
+
+	now := time.Now()
+	unpaidMonths := 0
+	for startDate.Before(now) {
+		// Проверяем, был ли оплачен текущий месяц
+		if _, ok := paidMonthsTime[time.Date(startDate.Year(), startDate.Month(), 1, 0, 0, 0, 0, time.UTC)]; !ok {
+			unpaidMonths++
+		}
+		startDate = startDate.AddDate(0, 1, 0) // Переходим к следующему месяцу
+	}
+
+	return unpaidMonths, nil
 }
 
 // SetMemberStartDate устанавливает начальную дату для участника
@@ -192,38 +244,6 @@ func GetMemberStartDate(name string) (string, error) {
 		return "", err
 	}
 	return startDate, nil
-}
-
-// Вспомогательная функция для расчета количества неоплаченных месяцев
-func calculateUnpaidMonths(startDateStr string, paidMonths []string) int {
-	startDate, err := time.Parse("2006-01-02", startDateStr)
-	if err != nil {
-		log.Printf("Error parsing start date: %v", err)
-		return 0
-	}
-
-	// Приводим оплаченные месяцы к формату time.Time для упрощения сравнения
-	paidMonthsTime := make(map[time.Time]bool)
-	for _, monthStr := range paidMonths {
-		monthTime, err := time.Parse("2006-01", monthStr)
-		if err != nil {
-			log.Printf("Error parsing paid month: %v", err)
-			continue
-		}
-		paidMonthsTime[monthTime] = true
-	}
-
-	now := time.Now()
-	unpaidMonths := 0
-	for startDate.Before(now) {
-		// Проверяем, был ли оплачен текущий месяц
-		if _, ok := paidMonthsTime[time.Date(startDate.Year(), startDate.Month(), 1, 0, 0, 0, 0, time.UTC)]; !ok {
-			unpaidMonths++
-		}
-		startDate = startDate.AddDate(0, 1, 0) // Переходим к следующему месяцу
-	}
-
-	return unpaidMonths
 }
 
 // Вспомогательная функция для разделения строки с месяцами на срез строк
